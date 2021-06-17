@@ -1,10 +1,13 @@
 import matplotlib.pyplot as plt
+from matplotlib.backends.backend_pdf import PdfPages
 import numpy as np
 import pandas as pd
 import seaborn as sns
 from sklearn.cluster import KMeans
 from sklearn.model_selection import train_test_split
 from sklearn.preprocessing import MinMaxScaler
+from scipy.ndimage import gaussian_filter1d
+from handy_functions import to_weekday_name
 
 
 class poly():
@@ -297,7 +300,6 @@ class kmeanclass_tot():
         plt.show()
         plt.close()
 
-
 def analyze_assoc(df):
     from mlxtend.frequent_patterns import apriori, association_rules
     cerveceros = df[df['Item Name'].str.lower().str.contains('cerveza')]['Número de pedido']
@@ -335,13 +337,14 @@ def analyze_assoc(df):
 
     return rules
 
-def analyze_products_poly(products):
-        pp = PdfPages('Save multiple plots as PDF.pdf')
+def analyze_products_poly(products, limit=1000):
+
+        pp = PdfPages('Analisis productos.pdf')
 
         counter = 0
 
         for p in products:
-            if counter > 3:
+            if counter > limit:
                 break
             counter = counter + 1
             print('Analizando: ' + p)
@@ -427,13 +430,63 @@ def sales_hist(df):
     # df2['Item Name'] = df2['Item Name'].apply(lambda x: changename(x))
 
 def orders_by_day(df):
-    fig, axes = plt.subplots(figsize=(12, 9))
-    # orders = df.groupby(by='Número de pedido')['Dia_sem','Hora_float','Importe total del pedido'].mean()
-    orders = df.groupby(by='Hora').agg(
-        Dia_Sem=pd.NamedAgg(column="Dia_sem", aggfunc="mean"),
-        tot= pd.NamedAgg(column="Importe total del pedido", aggfunc="mean"),
+    df = df[df.Dia_sem > 4].reset_index()
+    df['Hora_float'] = df['Hora_float'].apply(lambda x: round(10*x)/10)
+    orders = df.groupby(by=['Hora_float','Dia_sem']).agg(
+        # Dia_sem=pd.NamedAgg(column="Dia_sem", aggfunc="mean"),
+        # Hora = pd.NamedAgg(column="Hora", aggfunc="mean"),
+        tot= pd.NamedAgg(column="Importe total del pedido", aggfunc="median"),
+        cant = pd.NamedAgg(column="Número de pedido", aggfunc="count"),
     ).reset_index()
-    # orders = orders.groupby(by = 'Hora' ).mean()
-    # sns.kdeplot(data=orders,x='Hora_float',hue='Dia_sem',palette='Set2').set_xlim(left=16)
-    sns.lineplot(data=orders[orders.Dia_sem > 3], x='Hora', y='tot', hue='Dia_sem', palette='Set2').set_xlim(left=16)
+    cant_dias = df.day_id.max() - df.day_id.min()
+    orders['cant'] = orders.cant/(cant_dias/7)
+    orders['Día'] = orders.Dia_sem.apply(lambda x: to_weekday_name(x))
+
+    orders = pd.pivot(orders,index='Hora_float' ,columns='Día', values = 'cant').fillna(0)
+    for dia in orders.columns:
+        orders[dia] = gaussian_filter1d(orders[dia], sigma=1.5)
+
+    orders = orders.reset_index().melt(id_vars=['Hora_float'], var_name='Día', value_name='tot')
+    fig, ax = plt.subplots(figsize=(12, 9))
+    sns.lineplot(
+        data=orders,
+        x='Hora_float',
+        y='tot',
+        hue='Día',
+        linewidth = 2,
+        palette='Set2').set_xlim(left=20)
+    plt.grid(True)
+    plt.show()
+    return orders
+
+def analyze_order_one_day(df, day=5):
+    df = df[df.Dia_sem == day].reset_index()
+    df['Hora_float'] = df['Hora_float'].apply(lambda x: round(10*x)/10)
+
+    orders = df.groupby(by=['Hora_float','day_id']).agg(
+        Dia_sem=pd.NamedAgg(column="Dia_sem", aggfunc="mean"),
+        # Hora = pd.NamedAgg(column="Hora", aggfunc="mean"),
+        tot= pd.NamedAgg(column="Importe total del pedido", aggfunc="median"),
+        cant = pd.NamedAgg(column="Número de pedido", aggfunc="count"),
+    ).reset_index()
+    cant_dias = df.day_id.max() - df.day_id.min()
+    orders['cant'] = orders.cant/(cant_dias/7)
+    orders['Día'] = orders.Dia_sem.apply(lambda x: to_weekday_name(x))
+
+    orders = pd.pivot(orders,index='Hora_float' ,columns='day_id', values = 'cant').fillna(0)
+    for dia in orders.columns:
+        orders[dia] = gaussian_filter1d(orders[dia], sigma=1)
+
+    orders = orders.reset_index().melt(id_vars=['Hora_float'], var_name='Día', value_name='tot')
+    fig, ax = plt.subplots(figsize=(12, 9))
+    sns.lineplot(
+        data=orders,
+        x='Hora_float',
+        y='tot',
+        # hue='Día',
+        # linewidth = 2,
+        err_style = 'band',
+        palette='Set2').set_xlim(left=20)
+    plt.grid(True)
+    plt.show()
     return orders

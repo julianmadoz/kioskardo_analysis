@@ -1,11 +1,15 @@
 from config import args
-from etl import ETL, creates_products
+from etl import ETL, creates_products, save_df_to_pickle, load_pickle
+import models
 
-df = ETL(args)
-products = creates_products(df)
+# df = ETL(args)
+df = load_pickle('df')
+# products = creates_products(df)
+# save_df(df, 'df')
+# models.analyze_products_poly(products,3)
 
-
-
+models.orders_by_day(df)
+orders = models.analyze_order_one_day(df)
 
 
 

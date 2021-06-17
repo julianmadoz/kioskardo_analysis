@@ -1,5 +1,6 @@
 import pandas as pd
 from datetime import datetime, timedelta
+
 from product import Product
 
 def ETL(args):
@@ -18,6 +19,13 @@ def ETL(args):
     carrito = df.groupby(by='Número de pedido').sum()
     df['cant_tot_items'] = df['Número de pedido'].apply(lambda x: carrito.loc[x, 'Cantidad'])
     df['Categoría'] = df['Categoría'].apply(lambda x: categories_classifier(x))
+    return df
+
+def save_df_to_pickle(df, file_name):
+    df.to_pickle(file_name + '.pkl')
+
+def load_pickle(file_name):
+    df = pd.read_pickle(file_name + '.pkl')
     return df
 
 def creates_products(df):
